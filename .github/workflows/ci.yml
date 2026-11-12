@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+    branches: [main, "scenario/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      INFRA_PAT: ${{ secrets.INFRA_PAT }}
+      # TODO: placeholders - fill in
+      INFRA_REPO: OWNER/INFRA_REPO
+      FRONTEND_MANIFEST: path/to/frontend/kustomization.yaml
+      BACKEND_MANIFEST: path/to/backend/kustomization.yaml
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1 # TODO: set region
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push images by tag
+        run: |
+          repo=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          for svc in frontend backend; do
+            docker build -t ghcr.io/$repo-$svc:${{ github.sha }} ./$svc
+            docker push ghcr.io/$repo-$svc:${{ github.sha }}
+          done
+
+      - name: Bump infra repo (tag, using PAT)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          repo=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          git clone https://x-access-token:${INFRA_PAT}@github.com/${INFRA_REPO}.git infra
+          cd infra
+          yq -i '.images[0].newName = "ghcr.io/'$repo'-frontend" | .images[0].newTag = "${{ github.sha }}"' "$FRONTEND_MANIFEST"
+          yq -i '.images[0].newName = "ghcr.io/'$repo'-backend" | .images[0].newTag = "${{ github.sha }}"' "$BACKEND_MANIFEST"
+          git config user.name ci
+          git config user.email ci@example.com
+          git commit -am "ci: bump images to ${{ github.sha }}"
+          git push
+
+      - name: Gitleaks (current tree only, late-stage)
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.24.2/gitleaks_8.24.2_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks detect --source . --no-git --verbose
