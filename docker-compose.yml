@@ -8,6 +8,8 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
   backend:
     build: ./backend
+    ports:
+      - "8000:8000"
     environment:
       DB_HOST: db
       DB_PORT: ${DB_PORT}
@@ -16,9 +18,3 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
     depends_on:
       - db
-  frontend:
-    build: ./frontend
-    ports:
-      - "8080:8080"
-    depends_on:
-      - backend
