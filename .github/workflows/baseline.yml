@@ -19,7 +19,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       INFRA_PAT: ${{ secrets.INFRA_PAT }}
       INFRA_REPO: eb2033/GitSentry-Baseline-IaC
-      APP_MANIFEST: k8s/apps/app/kustomization.yaml
+      APP_MANIFEST: k8s/apps/overlays/baseline/kustomization.yaml
     steps:
       - uses: actions/checkout@v4
 
